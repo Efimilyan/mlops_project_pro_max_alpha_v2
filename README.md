@@ -343,7 +343,8 @@ Stanford Online Products, официальный архив `Stanford_Online_Pro
 
 Команды из раздела «Команды» выполнены по порядку в свежем клоне (`git clone --branch develop`,
 коммит `19a43ea`). Кэш Hugging Face был пустой (отдельный `HF_HOME`), образ собран с
-`docker build --no-cache`; базовый образ Triton был уже скачан. Ручных правок не понадобилось.
+`docker build --no-cache`, а скачивание базового образа с нуля проверено отдельным сборщиком
+с пустым кэшем (см. таблицу). Ручных правок не понадобилось.
 
 | Шаг | Результат |
 |---|---|
@@ -352,7 +353,7 @@ Stanford Online Products, официальный архив `Stanford_Online_Pro
 | `build_manifest.py` | каталог 106 224 / запросы 11 803 / дубликаты 2 026; sha256 манифеста `ceae52a3…` совпал |
 | `fetch_index.py` | `index.faiss` и `index.json` скачаны из релиза, sha256 совпали |
 | `docker build --no-cache` | OK: `faiss 1.16.0`, `numpy 1.26.4` |
-| Базовый образ Triton | на шаге 0 скачан анонимно с `nvcr.io` на машину, где его не было (`docker pull`, ~10.6 GB, вход не нужен). Повторная сборка после `docker image rm` обоих образов брала слои из хранилища containerd Docker Desktop, так что второй раз скачивание с нуля не проверялось |
+| Сборка образа с пустым кэшем | отдельный сборщик BuildKit (`docker buildx create --driver docker-container`, пустое хранилище) скачал базовый образ с `nvcr.io` анонимно: 40 слоёв, **10.56 GB**; вся сборка `docker/Dockerfile` заняла **420 с**, `faiss 1.16.0`, `numpy 1.26.4` |
 | `docker run` | `loaded /index/index.faiss: 106224 vectors, dim 512` |
 | `pytest -q` | **9 passed** (веса CLIP скачались только из ревизии `c237dc49…`) |
 | `evaluate_hit5.py` | Hit@5 = 13/24; `eval/results.csv` побайтно совпал с закоммиченным |
