@@ -117,6 +117,23 @@ def assign_roles(photos: Iterable[Photo]) -> dict[int, Assignment]:
     return result
 
 
+def prototype_subset(
+    photos: Iterable[Photo], roles: dict[int, Assignment], min_catalog: int = 1000
+) -> tuple[list[Photo], list[Photo]]:
+    by_class: dict[int, list[Photo]] = defaultdict(list)
+    for p in sorted(photos, key=lambda p: p.image_id):
+        if roles[p.image_id].role != ROLE_DUPLICATE:
+            by_class[p.class_id].append(p)
+    catalog: list[Photo] = []
+    queries: list[Photo] = []
+    for class_id in sorted(by_class, key=lambda c: stable_rank("prototype", c)):
+        if len(catalog) >= min_catalog:
+            break
+        for p in by_class[class_id]:
+            (queries if roles[p.image_id].role == ROLE_QUERY else catalog).append(p)
+    return catalog, queries
+
+
 def manifest_rows(photos: Iterable[Photo], roles: dict[int, Assignment]) -> list[list[str]]:
     rows = []
     for p in sorted(photos, key=lambda p: p.image_id):

@@ -15,8 +15,12 @@ ID 5 ближайших фото каталога.
 | Digest образа (linux/arm64) | `sha256:cdd351866b6dfbbae6abefee8bab47f2808cd0be33b6fb7825c6f591e5cb11e9` | этот README |
 | Python внутри образа | 3.12.3 (Ubuntu 24.04.5 LTS), предустановлен numpy 1.26.4 | проверено `docker run` |
 | `tritonclient[http]` | 2.75.0 (совпадает с версией сервера) | `pyproject.toml` |
+| `torch` / `transformers` | 2.15.0 / 5.24.1 | `uv.lock` |
+| `faiss-cpu` / `numpy` / `pillow` | 1.16.0 / 2.5.5 / 13.0.0 | `uv.lock` |
 
-Машина разработки: macOS, Apple Silicon (arm64), без GPU.
+Машина разработки: macOS 26.5, Apple Silicon (arm64), без GPU.
+`uv.lock` фиксирует одинаковые версии для всех платформ. Wheel `torch 2.15.0`
+для Mac собран под `macosx_14_0_arm64`, поэтому нужна **macOS ≥ 14**.
 
 ### Почему так
 
@@ -43,8 +47,11 @@ ID 5 ближайших фото каталога.
 
 ### Известные риски / не проверено
 
-- На macOS arm64 резолвер выбирает более старые `torch` / `faiss-cpu`, чем на Linux
-  (2.11.0 / 1.12.0 против 2.15.0 / 1.16.0). Нужно решить, фиксировать ли одинаковые версии.
+- **`torch` и `faiss` не импортируются в одном процессе.** На macOS у каждого своя копия
+  `libomp.dylib` (`torch/lib/` и `faiss/.dylibs/`). Если `faiss` загружен первым, свёртки
+  `torch` падают с segfault (exit 139, воспроизведено). Поэтому эмбеддинги (`torch`)
+  и FAISS-индекс считаются отдельными шагами, клиент использует только `torch`,
+  а сервер Triton только `faiss`.
 - В образе numpy 1.26.4, локально резолвится numpy 2.x. Совместимость Python backend
   с numpy 2.x после установки `faiss-cpu` в образ нужно проверить.
 
@@ -95,6 +102,27 @@ Stanford Online Products, официальный архив `Stanford_Online_Pro
   Две сборки подряд дают побайтно одинаковый файл.
 - Сборка занимает ~8 с на Apple Silicon (хеширование всех файлов).
 
+## Прототип: выбор модели
+
+Подмножество для прототипа (`prototype_subset` в `src/sop_search/split.py`): товары берутся
+целиком в порядке `sha256("sop-split-v1:prototype:<class_id>")`, пока в каталоге не станет
+≥1000 фото. Вышло 1003 фото каталога, 119 запросов, 215 товаров.
+
+Эмбеддинг для обеих моделей L2-нормируется, мера сходства — косинус, то есть скалярное
+произведение нормированных векторов (`IndexFlatIP`). Замер на CPU Apple Silicon,
+8 потоков torch, батч 32 (`scripts/compare_models.py`, результаты в `artifacts/prototype/compare.json`):
+
+| Модель | Ревизия HF | D | Параметры | мс/фото | self top-1 | Hit@5 | top-1 тот же товар |
+|---|---|---|---|---|---|---|---|
+| `openai/clip-vit-base-patch32` (image encoder + projection) | `3d74acf9a28c67741b2f4f2ea7635f0aaf6f0268` | 512 | 87.8 M | **9.1** | 1.000 | **0.899** | **0.832** |
+| `facebook/dinov2-small` (CLS после layernorm) | `ed25f3a31f01632728cabb09d1542f84ab7b0056` | 384 | 22.1 M | 15.3 | 1.000 | 0.815 | 0.714 |
+
+- DINOv2-small медленнее при вчетверо меньшем числе параметров: патч 14 на кадре 224
+  даёт 256 токенов, а у CLIP с патчем 32 их 49.
+- Запросов всего 119, разница по Hit@5 (0.08) примерно два стандартных отклонения.
+- Оценка для полного прогона (~118k фото): CLIP ≈ 18 мин, DINOv2-small ≈ 30 мин.
+  Индекс FP32: 106 224 × 512 × 4 Б ≈ 218 MB (CLIP) или ≈ 163 MB (DINOv2-small).
+
 ## Команды
 
 ```bash
@@ -106,6 +134,9 @@ uv run python scripts/download_data.py
 
 # манифест каталог/запросы -> artifacts/manifest.csv
 uv run python scripts/build_manifest.py
+
+# сравнение моделей на прототипе (1003 фото каталога + 119 запросов)
+uv run python scripts/compare_models.py
 
 # тесты
 uv run pytest -q

@@ -15,6 +15,7 @@ from sop_search.split import (
     Photo,
     assign_roles,
     manifest_bytes,
+    prototype_subset,
     read_manifest,
 )
 
@@ -93,6 +94,22 @@ def test_query_share_per_super_category():
             queries[p.super_class_id] += 1
     for super_id, n in unique.items():
         assert queries[super_id] == round(QUERY_FRACTION * n)
+
+
+def test_prototype_subset_takes_whole_products_deterministically():
+    photos = synthetic_photos()
+    roles = assign_roles(photos)
+    catalog, queries = prototype_subset(photos, roles, min_catalog=30)
+    shuffled = photos[:]
+    random.Random(7).shuffle(shuffled)
+    assert (catalog, queries) == prototype_subset(shuffled, roles, min_catalog=30)
+    assert len(catalog) >= 30
+    chosen = {p.class_id for p in catalog} | {p.class_id for p in queries}
+    for p in photos:
+        if p.class_id in chosen and roles[p.image_id].role == ROLE_CATALOG:
+            assert p in catalog
+    assert all(roles[p.image_id].role == ROLE_QUERY for p in queries)
+    assert {p.class_id for p in queries} <= {p.class_id for p in catalog}
 
 
 @pytest.mark.skipif(not MANIFEST.exists(), reason="run scripts/build_manifest.py first")
