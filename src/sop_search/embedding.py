@@ -21,7 +21,7 @@ DEFAULT_MODEL = "clip-vit-b32"
 
 MODELS = {
     "clip-vit-b32": ModelSpec(
-        "openai/clip-vit-base-patch32", "3d74acf9a28c67741b2f4f2ea7635f0aaf6f0268", "clip"
+        "openai/clip-vit-base-patch32", "c237dc49a33fc61debc9276459120b7eac67e7ef", "clip"
     ),
     "dinov2-small": ModelSpec(
         "facebook/dinov2-small", "ed25f3a31f01632728cabb09d1542f84ab7b0056", "dinov2"

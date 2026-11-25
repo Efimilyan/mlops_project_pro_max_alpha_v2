@@ -116,7 +116,7 @@ Stanford Online Products, официальный архив `Stanford_Online_Pro
 
 | Модель | Ревизия HF | D | Параметры | мс/фото | self top-1 | Hit@5 | top-1 тот же товар |
 |---|---|---|---|---|---|---|---|
-| `openai/clip-vit-base-patch32` (image encoder + projection) | `3d74acf9a28c67741b2f4f2ea7635f0aaf6f0268` | 512 | 87.8 M | **9.1** | 1.000 | **0.899** | **0.832** |
+| `openai/clip-vit-base-patch32` (image encoder + projection) | `c237dc49a33fc61debc9276459120b7eac67e7ef` | 512 | 87.8 M | **9.1** | 1.000 | **0.899** | **0.832** |
 | `facebook/dinov2-small` (CLS после layernorm) | `ed25f3a31f01632728cabb09d1542f84ab7b0056` | 384 | 22.1 M | 15.3 | 1.000 | 0.815 | 0.714 |
 
 - DINOv2-small медленнее при вчетверо меньшем числе параметров: патч 14 на кадре 224
@@ -127,6 +127,13 @@ Stanford Online Products, официальный архив `Stanford_Online_Pro
 
 **Выбрана CLIP ViT-B/32** (`DEFAULT_MODEL` в `src/sop_search/embedding.py`): на прототипе
 она лучше и по Hit@5, и по скорости.
+
+**Про ревизию CLIP.** В ветке `main` репозитория (`3d74acf…`) лежит только `pytorch_model.bin`.
+В таком случае `transformers` сам ищет открытый PR с safetensors (`refs/pr/66`) и молча
+грузит веса оттуда. Поэтому закреплён сам коммит этого PR, `c237dc49…`: в нём есть
+`config.json`, `preprocessor_config.json` и `model.safetensors`, и загрузка ничего больше
+не ищет. Проверено: эмбеддинги из `.bin` в `3d74acf…` и из safetensors в `c237dc49…`
+совпадают побайтно (max |Δ| = 0.0 на 20 фото).
 
 ## Сервис
 
@@ -166,7 +173,50 @@ Stanford Online Products, официальный архив `Stanford_Online_Pro
 Пример: запрос `29188` (`chair_final/291308531568_1.JPG`, белый пластиковый стул снизу) →
 первый ID `29187` (`chair_final/291308531568_0.JPG`, тот же стул спереди).
 
-Оценка полного прогона (106 224 фото): эмбеддинги ≈ 17 мин, индекс ≈ 218 MB.
+### Полный индекс (106 224 фото)
+
+| Шаг | Результат |
+|---|---|
+| Эмбеддинги (`embed_catalog.py --subset full`) | 928 с ≈ 15.5 мин (~8.7 мс/фото, 8 потоков, батч 64) |
+| Сборка индекса (`build_index.py`) | 0.5 с; **векторов 106 224, размерность 512, уникальных ID 106 224**; self top-1 на 1000 векторах: OK |
+| `index.faiss` | 218 396 634 байта, sha256 `f0d37d15d7e786bd414da704bee22fcd3e3affd75a6da94ba7e5f18700c202e0` |
+| Старт Triton до ready | ~3 с, лог: `loaded /index/index.faiss: 106224 vectors, dim 512` |
+| Перезапуск контейнера | ready через ~7 с, индекс снова читается из файла, эмбеддинги не пересчитываются |
+| Запрос из каталога `29187` | `[29187, 20658, 29095, 27779, 29190]`, top-1 = сам объект |
+| Запрос из пула запросов `29188` | `[29187, 27779, 29190, 29095, 104125]`, top-1 — тот же товар `4753` |
+| Вектор №500 из `embeddings.npy` | top-1 = `617` = `ids.npy[500]` (локальный индекс и Triton согласованы) |
+| Вектор неверной длины `[384]` | ошибка `Expected [512], got [384]` |
+| Задержка запроса по HTTP | медиана ~10.6 мс, максимум ~13.7 мс (20 запросов) |
+
+### Готовый индекс
+
+Индекс выложен в релиз
+[`index-clip-vit-b32-v1`](https://github.com/Efimilyan/mlops_project_pro_max_alpha_v2/releases/tag/index-clip-vit-b32-v1)
+(привязан к коммиту `b334465`, на котором индекс собран):
+
+| Файл | Размер | sha256 |
+|---|---|---|
+| [`index.faiss`](https://github.com/Efimilyan/mlops_project_pro_max_alpha_v2/releases/download/index-clip-vit-b32-v1/index.faiss) | 218 396 634 Б | `f0d37d15d7e786bd414da704bee22fcd3e3affd75a6da94ba7e5f18700c202e0` |
+| [`index.json`](https://github.com/Efimilyan/mlops_project_pro_max_alpha_v2/releases/download/index-clip-vit-b32-v1/index.json) | 579 Б | `c09492adffa6a310b733f3f777d1a7052675e1c1d62f9b58d79f4b94a9677279` |
+
+`scripts/fetch_index.py` скачивает оба файла в `artifacts/full/` и сверяет sha256.
+`index.json` хранит модель, ревизию, размерность, число векторов и sha256 манифеста,
+на котором собран индекс. Если нужно собрать индекс заново, есть
+`embed_catalog.py` + `build_index.py`. Побайтное совпадение с релизом на другой машине
+не гарантируется: результат float-вычислений `torch` может отличаться между CPU и версиями BLAS.
+
+### Ресурсы
+
+| Что | Диск | RAM (пик RSS) |
+|---|---|---|
+| Архив датасета + распакованный | 2.9 GB + 3.1 GB | — |
+| `artifacts/full/` (эмбеддинги 207 MB + индекс 218 MB) | 417 MB | — |
+| `.venv` | 869 MB | — |
+| Веса CLIP в кэше HF | ~605 MB | — |
+| Образ `sop-triton` | 28.2 GB | — |
+| `embed_catalog.py` | — | ~1.4 GB на прототипе; на полном каталоге плюс ~0.2 GB под векторы (оценка, не замерялось) |
+| `build_index.py` | — | 0.73 GB |
+| Контейнер Triton с полным индексом | — | ~250–330 MB |
 
 ## Команды
 
@@ -183,15 +233,20 @@ uv run python scripts/build_manifest.py
 # сравнение моделей на прототипе (1003 фото каталога + 119 запросов)
 uv run python scripts/compare_models.py
 
-# эмбеддинги (torch) и индекс (faiss): отдельные процессы
-uv run python scripts/embed_catalog.py --subset prototype
-uv run python scripts/build_index.py --dir artifacts/prototype
+# индекс, вариант А: скачать готовый из релиза (~218 MB) и проверить sha256
+uv run python scripts/fetch_index.py
+
+# индекс, вариант Б: собрать самому (~16 мин). torch и faiss в отдельных процессах
+uv run python scripts/embed_catalog.py --subset full
+uv run python scripts/build_index.py --dir artifacts/full
+
+# прототип на 1003 фото (то же самое с --subset prototype / --dir artifacts/prototype)
 
 # сервер: образ Triton 26.11 + faiss-cpu
 docker build -t sop-triton docker/
 docker run --rm -p 8000:8000 -p 8001:8001 -p 8002:8002 \
   -v "$PWD/model_repository:/models:ro" \
-  -v "$PWD/artifacts/prototype:/index:ro" \
+  -v "$PWD/artifacts/full:/index:ro" \
   sop-triton tritonserver --model-repository=/models
 
 # клиент: по ID из манифеста или по файлу
