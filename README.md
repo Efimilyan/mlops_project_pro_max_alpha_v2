@@ -52,8 +52,10 @@ ID 5 ближайших фото каталога.
   `torch` падают с segfault (exit 139, воспроизведено). Поэтому эмбеддинги (`torch`)
   и FAISS-индекс считаются отдельными шагами, клиент использует только `torch`,
   а сервер Triton только `faiss`.
-- В образе numpy 1.26.4, локально резолвится numpy 2.x. Совместимость Python backend
-  с numpy 2.x после установки `faiss-cpu` в образ нужно проверить.
+- В образе сервера стоит numpy 1.26.4, в клиенте 2.5.5. `docker/Dockerfile` закрепляет
+  `faiss-cpu==1.16.0` и `numpy==1.26.4`, поэтому numpy в образе не обновляется.
+  Индекс, записанный `faiss.write_index` на Mac (numpy 2.x), читается в контейнере
+  без ошибок: формат файла FAISS от numpy не зависит.
 
 ## Данные
 
@@ -123,6 +125,49 @@ Stanford Online Products, официальный архив `Stanford_Online_Pro
 - Оценка для полного прогона (~118k фото): CLIP ≈ 18 мин, DINOv2-small ≈ 30 мин.
   Индекс FP32: 106 224 × 512 × 4 Б ≈ 218 MB (CLIP) или ≈ 163 MB (DINOv2-small).
 
+**Выбрана CLIP ViT-B/32** (`DEFAULT_MODEL` в `src/sop_search/embedding.py`): на прототипе
+она лучше и по Hit@5, и по скорости.
+
+## Сервис
+
+```
+клиент: фото -> CLIP (общая предобработка) -> FP32[512], L2-норма
+       -> Triton, модель knn_search (Python backend, FAISS загружается один раз в initialize())
+       <- NEIGHBOR_IDS INT64[5], ближайший первым
+```
+
+- Индекс: `faiss.IndexIDMap2(faiss.IndexFlatIP(512))`, точный поиск. В индексе хранятся
+  сами `image_id` (`add_with_ids`), поэтому сервер возвращает постоянные ID,
+  а не номера строк FAISS.
+- Вход `EMBEDDING` FP32 `[512]`, выход `NEIGHBOR_IDS` INT64 `[5]`, `max_batch_size: 0`.
+- **Проверка размерности** делается в `config.pbtxt` (`dims: [ 512 ]`): Triton отклоняет
+  вектор другой длины до вызова `model.py`. `model.py` дополнительно проверяет форму
+  и NaN/Inf, а при старте сверяет размерность индекса с конфигом.
+- Путь к индексу задаётся параметром `index_path` в `config.pbtxt` (`/index/index.faiss`).
+  Какой индекс подключить, прототип или полный, определяет монтирование `-v ...:/index`.
+- Сборка разделена на два процесса: `embed_catalog.py` (только `torch`) пишет
+  `embeddings.npy` и `ids.npy`, затем `build_index.py` (только `faiss`) пишет `index.faiss`.
+
+### Прототип end-to-end (1003 фото)
+
+| Шаг | Результат |
+|---|---|
+| Эмбеддинги 1003 фото | 9.6 с (~9.6 мс/фото, 8 потоков) |
+| Сборка индекса | <0.2 с, 2.1 MB; self top-1 на 1000 векторах: OK |
+| Старт Triton до ready | ~4 с, лог: `loaded /index/index.faiss: 1003 vectors, dim 512` |
+| Перезапуск контейнера | индекс читается из файла, ничего не пересчитывается |
+| Запрос из каталога `29187` | top-1 = `29187` (он сам) |
+| Запрос из пула запросов `29188` | `[29187, 29190, 86851, 109390, 30636]`: два первых — тот же товар `4753` |
+| Вектор неверной длины `[3]` | ошибка `unexpected shape for input 'EMBEDDING' ... Expected [512], got [3]` |
+| Следующий валидный запрос | 200, верный ответ |
+| Задержка запроса по HTTP | медиана ~5.5 мс |
+| RAM контейнера | ~86 MiB |
+
+Пример: запрос `29188` (`chair_final/291308531568_1.JPG`, белый пластиковый стул снизу) →
+первый ID `29187` (`chair_final/291308531568_0.JPG`, тот же стул спереди).
+
+Оценка полного прогона (106 224 фото): эмбеддинги ≈ 17 мин, индекс ≈ 218 MB.
+
 ## Команды
 
 ```bash
@@ -138,9 +183,21 @@ uv run python scripts/build_manifest.py
 # сравнение моделей на прототипе (1003 фото каталога + 119 запросов)
 uv run python scripts/compare_models.py
 
+# эмбеддинги (torch) и индекс (faiss): отдельные процессы
+uv run python scripts/embed_catalog.py --subset prototype
+uv run python scripts/build_index.py --dir artifacts/prototype
+
+# сервер: образ Triton 26.11 + faiss-cpu
+docker build -t sop-triton docker/
+docker run --rm -p 8000:8000 -p 8001:8001 -p 8002:8002 \
+  -v "$PWD/model_repository:/models:ro" \
+  -v "$PWD/artifacts/prototype:/index:ro" \
+  sop-triton tritonserver --model-repository=/models
+
+# клиент: по ID из манифеста или по файлу
+uv run python client/search.py --image-id 29188
+uv run python client/search.py --image path/to/photo.jpg
+
 # тесты
 uv run pytest -q
-
-# образ сервера
-docker pull nvcr.io/nvidia/tritonserver:26.11-py3
 ```

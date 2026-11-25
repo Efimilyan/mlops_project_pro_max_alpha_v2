@@ -1,0 +1,31 @@
+name: "knn_search"
+backend: "python"
+max_batch_size: 0
+
+input [
+  {
+    name: "EMBEDDING"
+    data_type: TYPE_FP32
+    dims: [ 512 ]
+  }
+]
+
+output [
+  {
+    name: "NEIGHBOR_IDS"
+    data_type: TYPE_INT64
+    dims: [ 5 ]
+  }
+]
+
+instance_group [
+  {
+    kind: KIND_CPU
+    count: 1
+  }
+]
+
+parameters: {
+  key: "index_path"
+  value: { string_value: "/index/index.faiss" }
+}

@@ -17,6 +17,8 @@ class ModelSpec:
     kind: str
 
 
+DEFAULT_MODEL = "clip-vit-b32"
+
 MODELS = {
     "clip-vit-b32": ModelSpec(
         "openai/clip-vit-base-patch32", "3d74acf9a28c67741b2f4f2ea7635f0aaf6f0268", "clip"
