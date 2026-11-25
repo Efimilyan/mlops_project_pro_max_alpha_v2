@@ -15,7 +15,7 @@ ID 5 ближайших фото каталога.
 | [`uv`](https://docs.astral.sh/uv/) | ≥ 0.13; Python 3.12 `uv` скачает сам | uv 0.13.1 |
 | Docker | Docker Desktop или другой движок с CLI `docker`; входить в аккаунт не нужно | Docker 29.7.2 |
 | Свободный диск | **≥ 40 GB**: образ Triton 28.2 GB, датасет 6 GB (архив + распаковка), `.venv` 0.9 GB, веса CLIP 0.6 GB, индекс и эмбеддинги 0.4 GB | — |
-| RAM | ≥ 8 GB на машине. Расчёт эмбеддингов ~1.6 GB (оценка), контейнер Triton ~0.35 GB | 8 GB под Docker VM |
+| RAM | ≥ 8 GB на машине. Расчёт эмбеддингов на полном каталоге — пик 3.75 GB, контейнер Triton ~0.35 GB | 8 GB под Docker VM |
 | Сеть | доступ к Google Drive (датасет), GitHub Releases (индекс), Hugging Face (веса CLIP), `nvcr.io` (образ Triton), PyPI | — |
 | Порты | свободны 8000, 8001, 8002 | — |
 
@@ -217,7 +217,7 @@ Stanford Online Products, официальный архив `Stanford_Online_Pro
 `index.json` хранит модель, ревизию, размерность, число векторов и sha256 манифеста,
 на котором собран индекс. Если нужно собрать индекс заново, есть
 `embed_catalog.py` + `build_index.py`. Побайтное совпадение с релизом на другой машине
-не гарантируется: результат float-вычислений `torch` может отличаться между CPU и версиями BLAS.
+не гарантируется: результат float-вычислений `torch` может отличаться между CPU и версиями BLAS. На этой машине повторный полный расчёт дал побайтно те же `embeddings.npy`.
 
 ### Ресурсы
 
@@ -228,7 +228,7 @@ Stanford Online Products, официальный архив `Stanford_Online_Pro
 | `.venv` | 869 MB | — |
 | Веса CLIP в кэше HF | ~605 MB | — |
 | Образ `sop-triton` | 28.2 GB | — |
-| `embed_catalog.py` | — | ~1.4 GB на прототипе; на полном каталоге плюс ~0.2 GB под векторы (оценка, не замерялось) |
+| `embed_catalog.py` | — | **3.75 GB** на полном каталоге (замер `/usr/bin/time -l`; 1.4 GB на прототипе) |
 | `build_index.py` | — | 0.73 GB |
 | Контейнер Triton с полным индексом | — | ~250–330 MB |
 
@@ -302,6 +302,43 @@ Stanford Online Products, официальный архив `Stanford_Online_Pro
 Все 5 ответов — тоже фото дна других чайников. Модель сопоставляет вид детали,
 а не сам товар; по снимку дна товар не определить.
 
+### Пример ответа сервиса
+
+Запрос — фото из пула запросов `29188` (`chair_final/291308531568_1.JPG`: белый пластиковый
+стул-«ракушка» на металлических ножках, снят снизу на траве). Этого фото в индексе нет.
+
+Сырой ответ Triton на `POST /v2/models/knn_search/infer` с вектором FP32[512] этого фото:
+
+```json
+{"model_name":"knn_search","model_version":"1","outputs":[{"name":"NEIGHBOR_IDS","datatype":"INT64","shape":[5],"data":[29187,27779,29190,29095,104125]}]}
+```
+
+Вывод клиента `uv run python client/search.py --image-id 29188` (ID расшифрованы по манифесту):
+
+```json
+{
+  "neighbor_ids": [29187, 27779, 29190, 29095, 104125],
+  "neighbors": [
+    {"rank": 1, "image_id": 29187, "class_id": 4753, "role": "catalog", "path": "data/raw/Stanford_Online_Products/chair_final/291308531568_0.JPG"},
+    {"rank": 2, "image_id": 27779, "class_id": 4508, "role": "catalog", "path": "data/raw/Stanford_Online_Products/chair_final/271656829792_0.JPG"},
+    {"rank": 3, "image_id": 29190, "class_id": 4753, "role": "catalog", "path": "data/raw/Stanford_Online_Products/chair_final/291308531568_3.JPG"},
+    {"rank": 4, "image_id": 29095, "class_id": 4737, "role": "catalog", "path": "data/raw/Stanford_Online_Products/chair_final/291306373496_5.JPG"},
+    {"rank": 5, "image_id": 104125, "class_id": 19255, "role": "catalog", "path": "data/raw/Stanford_Online_Products/table_final/181601909216_2.JPG"}
+  ]
+}
+```
+
+| # | ID | Товар | Что на фото |
+|---|---|---|---|
+| 1 | 29187 | **4753 (тот же)** | тот же белый стул спереди, на траве |
+| 2 | 27779 | 4508 | другой белый пластиковый стул-«ракушка», крупный план |
+| 3 | 29190 | **4753 (тот же)** | тот же стул сзади, на траве |
+| 4 | 29095 | 4737 | другой бежевый стул-«ракушка», вид сзади |
+| 5 | 104125 | 19255 (категория table) | жёлтое кресло-«ракушка» на хромированной ножке, на траве |
+
+Все 5 ответов — стулья-«ракушки» похожей формы. Два из них — тот же товар (Hit@5, первое место).
+Лист с картинками: `uv run python scripts/show_neighbors.py --image-id 29188`.
+
 ## Прогон с нуля
 
 Команды из раздела «Команды» выполнены по порядку в свежем клоне (`git clone --branch develop`,
@@ -315,6 +352,7 @@ Stanford Online Products, официальный архив `Stanford_Online_Pro
 | `build_manifest.py` | каталог 106 224 / запросы 11 803 / дубликаты 2 026; sha256 манифеста `ceae52a3…` совпал |
 | `fetch_index.py` | `index.faiss` и `index.json` скачаны из релиза, sha256 совпали |
 | `docker build --no-cache` | OK: `faiss 1.16.0`, `numpy 1.26.4` |
+| Базовый образ Triton | на шаге 0 скачан анонимно с `nvcr.io` на машину, где его не было (`docker pull`, ~10.6 GB, вход не нужен). Повторная сборка после `docker image rm` обоих образов брала слои из хранилища containerd Docker Desktop, так что второй раз скачивание с нуля не проверялось |
 | `docker run` | `loaded /index/index.faiss: 106224 vectors, dim 512` |
 | `pytest -q` | **9 passed** (веса CLIP скачались только из ревизии `c237dc49…`) |
 | `evaluate_hit5.py` | Hit@5 = 13/24; `eval/results.csv` побайтно совпал с закоммиченным |
