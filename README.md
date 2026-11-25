@@ -302,6 +302,27 @@ Stanford Online Products, официальный архив `Stanford_Online_Pro
 Все 5 ответов — тоже фото дна других чайников. Модель сопоставляет вид детали,
 а не сам товар; по снимку дна товар не определить.
 
+## Прогон с нуля
+
+Команды из раздела «Команды» выполнены по порядку в свежем клоне (`git clone --branch develop`,
+коммит `19a43ea`). Кэш Hugging Face был пустой (отдельный `HF_HOME`), образ собран с
+`docker build --no-cache`; базовый образ Triton был уже скачан. Ручных правок не понадобилось.
+
+| Шаг | Результат |
+|---|---|
+| `uv sync` | OK, Python 3.12, пакеты по `uv.lock` |
+| `download_data.py` | 163 с: скачан архив, размер и sha256 совпали, распакован |
+| `build_manifest.py` | каталог 106 224 / запросы 11 803 / дубликаты 2 026; sha256 манифеста `ceae52a3…` совпал |
+| `fetch_index.py` | `index.faiss` и `index.json` скачаны из релиза, sha256 совпали |
+| `docker build --no-cache` | OK: `faiss 1.16.0`, `numpy 1.26.4` |
+| `docker run` | `loaded /index/index.faiss: 106224 vectors, dim 512` |
+| `pytest -q` | **9 passed** (веса CLIP скачались только из ревизии `c237dc49…`) |
+| `evaluate_hit5.py` | Hit@5 = 13/24; `eval/results.csv` побайтно совпал с закоммиченным |
+| `client/search.py --image-id 29188` | OK |
+
+Место на диске в чистом клоне: данные 6.0 GB, `.venv` 0.87 GB, `artifacts/` 0.22 GB,
+кэш HF 0.58 GB, плюс образ Triton 28.2 GB.
+
 ## Команды
 
 ```bash
