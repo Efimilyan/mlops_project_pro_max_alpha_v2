@@ -5,23 +5,14 @@ import json
 import sys
 from pathlib import Path
 
-import numpy as np
-import tritonclient.http as httpclient
 from tritonclient.utils import InferenceServerException
 
 from sop_search.embedding import DEFAULT_MODEL, MODELS, Embedder
+from sop_search.service import DEFAULT_URL, connect, search
 from sop_search.split import read_manifest
 
 ROOT = Path(__file__).resolve().parents[1]
 DATASET_DIR = ROOT / "data" / "raw" / "Stanford_Online_Products"
-
-
-def query_server(client: httpclient.InferenceServerClient, vec: np.ndarray) -> list[int]:
-    inp = httpclient.InferInput("EMBEDDING", list(vec.shape), "FP32")
-    inp.set_data_from_numpy(vec.astype(np.float32))
-    out = httpclient.InferRequestedOutput("NEIGHBOR_IDS")
-    result = client.infer("knn_search", inputs=[inp], outputs=[out])
-    return [int(i) for i in result.as_numpy("NEIGHBOR_IDS")]
 
 
 def main() -> None:
@@ -30,7 +21,7 @@ def main() -> None:
     src.add_argument("--image", type=Path)
     src.add_argument("--image-id", type=int)
     parser.add_argument("--model", choices=sorted(MODELS), default=DEFAULT_MODEL)
-    parser.add_argument("--url", default="localhost:8000")
+    parser.add_argument("--url", default=DEFAULT_URL)
     parser.add_argument("--manifest", type=Path, default=ROOT / "artifacts" / "manifest.csv")
     parser.add_argument("--dataset-dir", type=Path, default=DATASET_DIR)
     args = parser.parse_args()
@@ -48,9 +39,8 @@ def main() -> None:
         print(f"query: {image_path}")
 
     vec = Embedder(args.model).embed_paths([image_path])[0]
-    client = httpclient.InferenceServerClient(url=args.url)
     try:
-        ids = query_server(client, vec)
+        ids = search(connect(args.url), vec)
     except InferenceServerException as e:
         sys.exit(f"server error: {e}")
 
