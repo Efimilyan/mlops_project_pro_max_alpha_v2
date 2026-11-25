@@ -5,6 +5,20 @@
 моделью с Hugging Face, сервер NVIDIA Triton (Python backend + FAISS) возвращает
 ID 5 ближайших фото каталога.
 
+## Требования
+
+| Что | Требование | Проверено |
+|---|---|---|
+| ОС | macOS ≥ 14 на Apple Silicon. Под Linux x86_64 в `uv.lock` есть wheel'ы, а у образа Triton есть сборка amd64, но такой запуск не проверялся | macOS 26.5, arm64 |
+| GPU | не нужен, всё работает на CPU | — |
+| `git` | любой современный | — |
+| [`uv`](https://docs.astral.sh/uv/) | ≥ 0.13; Python 3.12 `uv` скачает сам | uv 0.13.1 |
+| Docker | Docker Desktop или другой движок с CLI `docker`; входить в аккаунт не нужно | Docker 29.7.2 |
+| Свободный диск | **≥ 40 GB**: образ Triton 28.2 GB, датасет 6 GB (архив + распаковка), `.venv` 0.9 GB, веса CLIP 0.6 GB, индекс и эмбеддинги 0.4 GB | — |
+| RAM | ≥ 8 GB на машине. Расчёт эмбеддингов ~1.6 GB (оценка), контейнер Triton ~0.35 GB | 8 GB под Docker VM |
+| Сеть | доступ к Google Drive (датасет), GitHub Releases (индекс), Hugging Face (веса CLIP), `nvcr.io` (образ Triton), PyPI | — |
+| Порты | свободны 8000, 8001, 8002 | — |
+
 ## Окружение и версии
 
 | Компонент | Версия | Где зафиксировано |
@@ -312,7 +326,9 @@ uv run python scripts/build_index.py --dir artifacts/full
 
 # прототип на 1003 фото (то же самое с --subset prototype / --dir artifacts/prototype)
 
-# сервер: образ Triton 26.11 + faiss-cpu
+# сервер: образ Triton 26.11 + faiss-cpu (первая сборка скачивает базовый образ ~10.6 GB)
+# docker run занимает терминал: дальнейшие команды выполняйте в другом терминале
+# (или добавьте -d и остановите потом docker stop)
 docker build -t sop-triton docker/
 docker run --rm -p 8000:8000 -p 8001:8001 -p 8002:8002 \
   -v "$PWD/model_repository:/models:ro" \
