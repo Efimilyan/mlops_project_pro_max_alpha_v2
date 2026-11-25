@@ -1,0 +1,25 @@
+query_id,class_id,super_class_id,path,expected_ids,reason
+2499,352,1,bicycle_final/171877460436_4.JPG,2495 2496 2497 2498 2500,same product class_id=352 (bicycle): 5 other photo(s) of this listing in the catalog
+1055,165,1,bicycle_final/131565001893_8.JPG,1047 1048 1049 1050 1051 1052 1053 1054 1056,same product class_id=165 (bicycle): 9 other photo(s) of this listing in the catalog
+9319,1316,2,cabinet_final/131460859829_1.JPG,9318,same product class_id=1316 (cabinet): 1 other photo(s) of this listing in the catalog
+9368,1331,2,cabinet_final/131542705547_0.JPG,9369 9370,same product class_id=1331 (cabinet): 2 other photo(s) of this listing in the catalog
+22569,3546,3,chair_final/151489159377_4.JPG,22565 22566 22567 22568 22570 22571,same product class_id=3546 (chair): 6 other photo(s) of this listing in the catalog
+28522,4640,3,chair_final/281505723246_0.JPG,28523 28524 28525 28526 28527,same product class_id=4640 (chair): 5 other photo(s) of this listing in the catalog
+35230,5863,4,coffee_maker_final/161795400304_1.JPG,35229 35231,same product class_id=5863 (coffee_maker): 2 other photo(s) of this listing in the catalog
+35347,5882,4,coffee_maker_final/170616985202_2.JPG,35345 35346,same product class_id=5882 (coffee_maker): 2 other photo(s) of this listing in the catalog
+47932,8216,5,fan_final/381367755841_4.JPG,47928 47929 47930 47931 47933,same product class_id=8216 (fan): 5 other photo(s) of this listing in the catalog
+44108,7518,5,fan_final/171874988997_1.JPG,44107,same product class_id=7518 (fan): 1 other photo(s) of this listing in the catalog
+52109,9012,6,kettle_final/191650547418_5.JPG,52104 52105 52106 52107 52108,same product class_id=9012 (kettle): 5 other photo(s) of this listing in the catalog
+55067,9566,6,kettle_final/271918269437_5.JPG,55062 55063 55064 55065 55066,same product class_id=9566 (kettle): 5 other photo(s) of this listing in the catalog
+59809,10422,7,lamp_final/131501722244_0.JPG,59810 59811 59812,same product class_id=10422 (lamp): 3 other photo(s) of this listing in the catalog
+59598,10390,7,lamp_final/121723170705_8.JPG,59589 59590 59591 59592 59593 59594 59595 59596 59597 59599,same product class_id=10390 (lamp): 10 other photo(s) of this listing in the catalog
+78538,13894,8,mug_final/261784170340_2.JPG,78535 78536 78537 78539 78540 78541 78542 78543 78544 78545,same product class_id=13894 (mug): 10 other photo(s) of this listing in the catalog
+75894,13381,8,mug_final/201319533902_1.JPG,75893 75895 75896 75897,same product class_id=13381 (mug): 4 other photo(s) of this listing in the catalog
+91076,16480,9,sofa_final/321819493816_5.JPG,91071 91072 91073 91074 91075 91077 91079,same product class_id=16480 (sofa): 7 other photo(s) of this listing in the catalog
+85015,15137,9,sofa_final/121707716185_2.JPG,85013 85014 85016,same product class_id=15137 (sofa): 3 other photo(s) of this listing in the catalog
+99570,18241,10,stapler_final/351471475397_1.JPG,99569,same product class_id=18241 (stapler): 1 other photo(s) of this listing in the catalog
+95998,17470,10,stapler_final/231528083695_1.JPG,95997 95999 96000,same product class_id=17470 (stapler): 3 other photo(s) of this listing in the catalog
+110572,20645,11,table_final/361136671228_0.JPG,110573 110574 110575 110576,same product class_id=20645 (table): 4 other photo(s) of this listing in the catalog
+109813,20512,11,table_final/331116222294_0.JPG,109814 109815,same product class_id=20512 (table): 2 other photo(s) of this listing in the catalog
+115960,21784,12,toaster_final/231649955904_1.JPG,115959,same product class_id=21784 (toaster): 1 other photo(s) of this listing in the catalog
+118209,22239,12,toaster_final/301713569269_6.JPG,118203 118204 118205 118206 118207 118208,same product class_id=22239 (toaster): 6 other photo(s) of this listing in the catalog
