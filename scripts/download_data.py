@@ -1,14 +1,3 @@
-"""Download and verify the Stanford Online Products archive, then extract it.
-
-Source: official links from the authors
-(https://github.com/rksltnl/Deep-Metric-Learning-CVPR16, section "Stanford Online
-Products dataset"). The Google Drive link is the default because the FTP link is
-blocked on some networks.
-
-Usage:
-    uv run python scripts/download_data.py [--data-dir data/raw] [--source gdrive|ftp]
-"""
-
 from __future__ import annotations
 
 import argparse
@@ -87,7 +76,7 @@ def extract(archive: Path, data_dir: Path) -> Path:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser = argparse.ArgumentParser(description="Download, verify and extract the Stanford Online Products archive")
     parser.add_argument("--data-dir", type=Path, default=ROOT / "data" / "raw")
     parser.add_argument("--source", choices=sorted(URLS), default="gdrive")
     args = parser.parse_args()

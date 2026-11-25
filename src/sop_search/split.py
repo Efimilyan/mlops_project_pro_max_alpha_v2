@@ -1,17 +1,3 @@
-"""Deterministic catalog / query split for Stanford Online Products.
-
-Rules (see README, section "Catalog / query split"):
-- One ID = one photo = ``image_id`` from ``Ebay_info.txt``. IDs are never renumbered.
-- Exact duplicates (identical file bytes) are collapsed: the photo with the smallest
-  ``image_id`` keeps its role, the others get role ``duplicate`` and are excluded
-  from both the catalog and the query pool.
-- Per super-category, ``round(QUERY_FRACTION * n_unique_photos)`` products donate
-  exactly one photo to the query pool. Only products with >= 2 unique photos are
-  eligible, so every query keeps >= 1 photo of its product in the catalog.
-- Products and photos are chosen by a salted SHA-256 rank, ties broken by the
-  integer ID. No RNG, no dependence on input order.
-"""
-
 from __future__ import annotations
 
 import csv
@@ -46,7 +32,7 @@ class Photo:
     image_id: int
     class_id: int
     super_class_id: int
-    path: str  # relative to the dataset root, as in Ebay_info.txt
+    path: str
     file_sha256: str
 
 
@@ -57,7 +43,6 @@ class Assignment:
 
 
 def read_ebay_info(path: Path) -> list[tuple[int, int, int, str]]:
-    """Parse ``Ebay_info.txt`` into ``(image_id, class_id, super_class_id, path)``."""
     rows: list[tuple[int, int, int, str]] = []
     with open(path, encoding="utf-8") as f:
         header = f.readline().split()
@@ -82,16 +67,13 @@ def file_sha256(path: Path, chunk_size: int = 1 << 20) -> str:
 
 
 def stable_rank(kind: str, key: int) -> tuple[str, int]:
-    """Sort key that is stable across processes and machines (unlike ``hash()``)."""
     digest = hashlib.sha256(f"{SPLIT_SALT}:{kind}:{key}".encode()).hexdigest()
     return digest, key
 
 
 def assign_roles(photos: Iterable[Photo]) -> dict[int, Assignment]:
-    """Return ``image_id -> Assignment``. Output does not depend on input order."""
     by_id = {p.image_id: p for p in photos}
 
-    # 1. Exact duplicates: smallest image_id in each byte-identical group is canonical.
     groups: dict[str, list[int]] = defaultdict(list)
     for image_id in sorted(by_id):
         groups[by_id[image_id].file_sha256].append(image_id)
@@ -99,12 +81,11 @@ def assign_roles(photos: Iterable[Photo]) -> dict[int, Assignment]:
     result: dict[int, Assignment] = {}
     unique_ids: list[int] = []
     for ids in groups.values():
-        canonical = ids[0]  # ids are appended in sorted order
+        canonical = ids[0]
         unique_ids.append(canonical)
         for dup in ids[1:]:
             result[dup] = Assignment(ROLE_DUPLICATE, duplicate_of=canonical)
 
-    # 2. Unique photos grouped by product and by super-category.
     photos_by_class: dict[int, list[int]] = defaultdict(list)
     classes_by_super: dict[int, set[int]] = defaultdict(set)
     unique_count_by_super: dict[int, int] = defaultdict(int)
@@ -114,7 +95,6 @@ def assign_roles(photos: Iterable[Photo]) -> dict[int, Assignment]:
         classes_by_super[p.super_class_id].add(p.class_id)
         unique_count_by_super[p.super_class_id] += 1
 
-    # 3. Per super-category: pick donor products, one query photo each.
     query_ids: set[int] = set()
     for super_id in sorted(classes_by_super):
         target = round(QUERY_FRACTION * unique_count_by_super[super_id])
@@ -156,7 +136,6 @@ def manifest_rows(photos: Iterable[Photo], roles: dict[int, Assignment]) -> list
 
 
 def manifest_bytes(photos: Iterable[Photo], roles: dict[int, Assignment]) -> bytes:
-    """Canonical CSV encoding of the manifest (fixed column order, ``\\n`` line ends)."""
     buf = io.StringIO()
     writer = csv.writer(buf, lineterminator="\n")
     writer.writerow(MANIFEST_HEADER)

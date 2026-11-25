@@ -1,12 +1,3 @@
-"""Build the catalog / query manifest for Stanford Online Products.
-
-Reads ``Ebay_info.txt``, hashes every image file (exact-duplicate detection),
-assigns roles with ``sop_search.split.assign_roles`` and writes a CSV manifest.
-
-Usage:
-    uv run python scripts/build_manifest.py [--dataset-dir ...] [--out artifacts/manifest.csv]
-"""
-
 from __future__ import annotations
 
 import argparse
@@ -29,7 +20,6 @@ from sop_search.split import (
 
 ROOT = Path(__file__).resolve().parents[1]
 
-# Dataset facts from the official README; the build fails if the archive differs.
 EXPECTED_IMAGES = 120_053
 EXPECTED_CLASSES = 22_634
 EXPECTED_SUPER_CLASSES = 12
@@ -37,7 +27,7 @@ MIN_CATALOG_SIZE = 100_000
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser = argparse.ArgumentParser(description="Build the catalog / query manifest")
     parser.add_argument(
         "--dataset-dir", type=Path, default=ROOT / "data" / "raw" / "Stanford_Online_Products"
     )
