@@ -206,7 +206,7 @@ Stanford Online Products, официальный архив `Stanford_Online_Pro
 
 Индекс выложен в релиз
 [`index-clip-vit-b32-v1`](https://github.com/Efimilyan/mlops_project_pro_max_alpha_v2/releases/tag/index-clip-vit-b32-v1)
-(привязан к коммиту `b334465`, на котором индекс собран):
+(привязан к коммиту `46e686f`, на котором индекс собран):
 
 | Файл | Размер | sha256 |
 |---|---|---|
@@ -265,7 +265,7 @@ Stanford Online Products, официальный архив `Stanford_Online_Pro
 24 запроса из пула запросов (в индекс не входят), по 2 на категорию, порядок по
 `sha256("sop-split-v1:eval:<image_id>")` (`scripts/make_eval_queries.py`). Ожидаемые ID —
 все фото того же товара в каталоге, причина указана в столбце `reason`.
-`eval/queries.csv` закоммичен **до** первого поиска по этим запросам (коммит `f6377e4`),
+`eval/queries.csv` закоммичен **до** первого поиска по этим запросам (коммит `603b507`),
 поиск запущен после.
 
 **Hit@5 = 13/24 = 0.542** (`scripts/evaluate_hit5.py`, ответы в `eval/results.csv`).
@@ -342,7 +342,7 @@ Stanford Online Products, официальный архив `Stanford_Online_Pro
 ## Прогон с нуля
 
 Команды из раздела «Команды» выполнены по порядку в свежем клоне (`git clone --branch develop`,
-коммит `19a43ea`). Кэш Hugging Face был пустой (отдельный `HF_HOME`), образ собран с
+коммит `0cf454b`). Кэш Hugging Face был пустой (отдельный `HF_HOME`), образ собран с
 `docker build --no-cache`, а скачивание базового образа с нуля проверено отдельным сборщиком
 с пустым кэшем (см. таблицу). Ручных правок не понадобилось.
 
